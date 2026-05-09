@@ -8,6 +8,8 @@ import type {
   AuthRequest,
   AccountRequest,
   AccountResponse,
+  VerifyOtpRequest,
+  ResendOtpRequest,
 } from "../types/api";
 
 /**
@@ -88,6 +90,19 @@ class ApiClient {
     const tokens = response.data.data;
     this.storeTokens(tokens.token, tokens.refreshToken);
     return tokens;
+  }
+
+  async verifyOtp(request: VerifyOtpRequest): Promise<void> {
+    await this.client.patch<ApiResponse<void>>(
+      "/auth/verifyOtp",
+      request
+    );
+  }
+
+  async resendOtp(email: string): Promise<void> {
+    await this.client.post<ApiResponse<void>>(
+      `/auth/resendOtp/${email}`
+    );
   }
 
   // ============== Vault Item Endpoints ==============

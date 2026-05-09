@@ -29,6 +29,16 @@ export interface AuthResponse {
   refreshToken: string;
 }
 
+// OTP DTOs
+export interface VerifyOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ResendOtpRequest {
+  email: string;
+}
+
 // Vault Item DTOs
 export interface ItemRequest {
   title: string;
