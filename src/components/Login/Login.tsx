@@ -12,7 +12,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isRegister, setIsRegister] = useState(false);
-  const [registerByUsername, setRegisterByUsername] = useState(false);
+  const [registerByUsername, setRegisterByUsername] = useState(true);
   const [registerName, setRegisterName] = useState("");
   const [showOtpVerification, setShowOtpVerification] = useState(false);
   const [otpCode, setOtpCode] = useState("");
@@ -391,20 +391,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       <button
                         type="button"
                         onClick={() => {
-                          setRegisterByUsername(false);
-                          setError("");
-                        }}
-                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                          !registerByUsername
-                            ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20"
-                            : "text-white/55 hover:text-white/70"
-                        }`}
-                      >
-                        Email Registration
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
                           setRegisterByUsername(true);
                           setError("");
                         }}
@@ -416,6 +402,39 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       >
                         Username Registration
                       </button>
+                      <button
+                        type="button"
+                        disabled
+                        onClick={() => {
+                          setRegisterByUsername(false);
+                          setError("");
+                        }}
+                        className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all bg-gray-500/20 text-gray-400 cursor-not-allowed opacity-60"
+                      >
+                        Email Registration
+                      </button>
+                    </div>
+
+                    {/* Email Registration Maintenance Notice */}
+                    <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-orange-500/10 border border-orange-400/30">
+                      <svg
+                        className="w-5 h-5 text-orange-300 flex-shrink-0 mt-0.5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <p className="text-xs text-orange-200 leading-relaxed">
+                        <span className="font-semibold block mb-1">
+                          ⚙️ Đang nâng cấp hệ thống
+                        </span>
+                        Đăng ký Email đang bảo trì. Vui lòng sử dụng Username để
+                        tiếp tục.
+                      </p>
                     </div>
 
                     <div>
@@ -437,7 +456,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                 {isRegister && !registerByUsername ? (
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
-                      Email
+                      Username
                     </label>
 
                     <input
@@ -445,7 +464,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="email@example.com"
+                      placeholder="username.example"
                       className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
                     />
                   </div>
@@ -479,15 +498,16 @@ export function Login({ onLoginSuccess }: LoginProps) {
                         />
                       </svg>
                       <p className="text-xs text-amber-200 leading-relaxed">
-                        Lưu ý: Tài khoản đăng ký bằng username không yêu cầu xác
-                        minh email. Hãy đảm bảo tài khoản của bạn an toàn.
+                        <strong>Lưu ý:</strong> Tài khoản này không xác minh qua
+                        email. Hãy chủ động bảo mật thông tin để tránh mất tài
+                        khoản.
                       </p>
                     </div>
                   </>
                 ) : (
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
-                      Email
+                      Username
                     </label>
 
                     <input
@@ -495,7 +515,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="email@example.com"
+                      placeholder="username.example"
                       className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
                     />
                   </div>
@@ -581,7 +601,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                   <button
                     onClick={() => {
                       setIsRegister(!isRegister);
-                      setRegisterByUsername(false);
+                      setRegisterByUsername(true);
                       setError("");
                     }}
                     className="text-violet-300 hover:text-violet-200 font-semibold transition-colors"
@@ -589,31 +609,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
                     {isRegister ? "Đăng nhập" : "Đăng ký miễn phí"}
                   </button>
                 </p>
-
-                {/* Demo account */}
-                <div className="mt-8 p-5 rounded-2xl bg-white/[0.04] border border-white/[0.1]">
-                  <p className="text-[10px] uppercase tracking-widest text-white/35 font-bold mb-4">
-                    Tài khoản trải nghiệm
-                  </p>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-white/50">Email</span>
-
-                      <span className="text-xs text-white/80 font-mono">
-                        user@example.com
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-white/50">Password</span>
-
-                      <span className="text-xs text-white/80 font-mono">
-                        Password@123
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </>
             )}
 

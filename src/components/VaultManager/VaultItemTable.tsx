@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ItemResponse } from "../../types/api";
 import { apiClient } from "../../services/api";
 import {
@@ -35,6 +35,29 @@ export function VaultItemTable({
 
   const [loadingDecrypt, setLoadingDecrypt] = useState<Set<string>>(new Set());
 
+  const [passwordTimeouts, setPasswordTimeouts] = useState<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+
+  const [notification, setNotification] = useState<{
+    id: string;
+    type: "reveal" | "timeout";
+    message: string;
+  } | null>(null);
+
+  const [timeoutCountdown, setTimeoutCountdown] = useState<
+    Record<string, number>
+  >({});
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(passwordTimeouts).forEach((timeout) =>
+        clearTimeout(timeout),
+      );
+    };
+  }, [passwordTimeouts]);
+
   const handleRevealPassword = async (itemId: string) => {
     onRevealPassword(itemId);
 
@@ -48,6 +71,89 @@ export function VaultItemTable({
           ...prev,
           [itemId]: decrypted,
         }));
+
+        // Show notification when password is revealed
+        setNotification({
+          id: itemId,
+          type: "reveal",
+          message: "🔓 Password revealed. Auto-clear in 10 seconds.",
+        });
+
+        // Clear notification after 3 seconds
+        setTimeout(() => setNotification(null), 3000);
+
+        // Set auto-clear timeout
+        const existingTimeout = passwordTimeouts[itemId];
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+
+        let countdownValue = 10;
+        setTimeoutCountdown((prev) => ({
+          ...prev,
+          [itemId]: countdownValue,
+        }));
+
+        // Countdown timer
+        const countdownInterval = setInterval(() => {
+          countdownValue--;
+          setTimeoutCountdown((prev) => ({
+            ...prev,
+            [itemId]: countdownValue,
+          }));
+
+          // Show warning at 5 seconds
+          if (countdownValue === 5) {
+            setNotification({
+              id: itemId,
+              type: "timeout",
+              message: "⏳ Password will auto-clear in 5 seconds",
+            });
+          }
+
+          if (countdownValue <= 0) {
+            clearInterval(countdownInterval);
+          }
+        }, 1000);
+
+        // Auto-clear password after 30 seconds
+        const timeout = setTimeout(() => {
+          setDecryptedPasswords((prev) => {
+            const newPasswords = { ...prev };
+            delete newPasswords[itemId];
+            return newPasswords;
+          });
+
+          // Clear from revealed passwords too
+          onRevealPassword(itemId);
+
+          // Show confirmation notification
+          setNotification({
+            id: itemId,
+            type: "timeout",
+            message: "🔒 Password auto-cleared for security",
+          });
+
+          setTimeout(() => setNotification(null), 3000);
+
+          setTimeoutCountdown((prev) => {
+            const newCountdown = { ...prev };
+            delete newCountdown[itemId];
+            return newCountdown;
+          });
+
+          // Remove from timeout tracking
+          setPasswordTimeouts((prev) => {
+            const newTimeouts = { ...prev };
+            delete newTimeouts[itemId];
+            return newTimeouts;
+          });
+        }, 10000);
+
+        setPasswordTimeouts((prev) => ({
+          ...prev,
+          [itemId]: timeout,
+        }));
       } catch (error) {
         console.error("Failed to decrypt password:", error);
       } finally {
@@ -57,6 +163,37 @@ export function VaultItemTable({
           return newSet;
         });
       }
+    } else if (revealedPasswords.has(itemId)) {
+      // Hide password and clear timeout
+      const existingTimeout = passwordTimeouts[itemId];
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        setPasswordTimeouts((prev) => {
+          const newTimeouts = { ...prev };
+          delete newTimeouts[itemId];
+          return newTimeouts;
+        });
+      }
+
+      setDecryptedPasswords((prev) => {
+        const newPasswords = { ...prev };
+        delete newPasswords[itemId];
+        return newPasswords;
+      });
+
+      setTimeoutCountdown((prev) => {
+        const newCountdown = { ...prev };
+        delete newCountdown[itemId];
+        return newCountdown;
+      });
+
+      setNotification({
+        id: itemId,
+        type: "reveal",
+        message: "🔒 Password hidden",
+      });
+
+      setTimeout(() => setNotification(null), 2000);
     }
   };
 
@@ -131,162 +268,195 @@ export function VaultItemTable({
   }
 
   return (
-    <div className="space-y-4 p-5">
-      {items.map((item) => {
-        const isRevealed = revealedPasswords.has(item.id);
-
-        const isDecrypting = loadingDecrypt.has(item.id);
-
-        const decryptedPassword = decryptedPasswords[item.id];
-
-        const displayPassword = isRevealed
-          ? isDecrypting
-            ? "Decrypting..."
-            : decryptedPassword || maskPassword(item.password)
-          : maskPassword(item.password);
-
-        const initials = item.title.charAt(0).toUpperCase();
-
-        return (
-          <div
-            key={item.id}
-            className="group rounded-3xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-xl transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.06]"
+    <>
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 backdrop-blur-xl animate-in slide-in-from-top-2 fade-in">
+          <div className="flex-1 text-sm text-emerald-200">
+            {notification.message}
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="text-emerald-300 hover:text-emerald-100 transition-colors"
           >
-            <div className="flex items-center gap-4 px-6 py-5">
-              {/* Avatar */}
-              <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 text-sm font-bold text-violet-200 shadow-lg shadow-violet-500/10">
-                {initials}
-              </div>
+            ✕
+          </button>
+        </div>
+      )}
 
-              {/* Info */}
-              <div className="min-w-0 flex-1">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="truncate text-sm font-semibold tracking-wide text-white">
-                    {truncateText(item.title, 28)}
-                  </span>
+      <div className="space-y-4 p-5">
+        {items.map((item) => {
+          const isRevealed = revealedPasswords.has(item.id);
 
-                  <span className="text-[11px] text-white/35">
-                    {formatDate(item.createdAt)}
-                  </span>
+          const isDecrypting = loadingDecrypt.has(item.id);
+
+          const decryptedPassword = decryptedPasswords[item.id];
+
+          const displayPassword = isRevealed
+            ? isDecrypting
+              ? "Decrypting..."
+              : decryptedPassword || maskPassword(item.password)
+            : maskPassword(item.password);
+
+          const initials = item.title.charAt(0).toUpperCase();
+
+          return (
+            <div
+              key={item.id}
+              className="group rounded-3xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-xl transition-all duration-200 hover:border-white/[0.14] hover:bg-white/[0.06]"
+            >
+              <div className="flex items-center gap-4 px-6 py-5">
+                {/* Avatar */}
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-violet-400/20 bg-gradient-to-br from-violet-500/20 to-indigo-500/20 text-sm font-bold text-violet-200 shadow-lg shadow-violet-500/10">
+                  {initials}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Username */}
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="max-w-[160px] truncate text-sm text-white/60">
-                      {truncateText(item.username, 24)}
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="truncate text-sm font-semibold tracking-wide text-white">
+                      {truncateText(item.title, 28)}
                     </span>
 
-                    <button
-                      onClick={async () => {
-                        const copied = await copyToClipboard(item.username);
-
-                        if (copied) {
-                          setCopiedId(`user-${item.id}`);
-
-                          setTimeout(() => setCopiedId(null), 2000);
-                        }
-                      }}
-                      className="rounded-md p-1 text-white/30 opacity-0 transition-all hover:bg-white/[0.06] hover:text-white/70 group-hover:opacity-100"
-                      title="Copy username"
-                    >
-                      {copiedId === `user-${item.id}` ? (
-                        <CheckIcon className="h-3.5 w-3.5 text-emerald-400" />
-                      ) : (
-                        <CopyIcon className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                    <span className="text-[11px] text-white/35">
+                      {formatDate(item.createdAt)}
+                    </span>
                   </div>
 
-                  <span className="text-white/15">•</span>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Username */}
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="max-w-[160px] truncate text-sm text-white/60">
+                        {truncateText(item.username, 24)}
+                      </span>
 
-                  {/* Password */}
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-sm tracking-wider text-white/60">
-                      {displayPassword}
-                    </span>
+                      <button
+                        onClick={async () => {
+                          const copied = await copyToClipboard(item.username);
 
-                    <button
-                      onClick={() => handleRevealPassword(item.id)}
-                      disabled={isDecrypting}
-                      className="rounded-md p-1 text-white/30 opacity-0 transition-all hover:bg-white/[0.06] hover:text-white/70 disabled:opacity-20 group-hover:opacity-100"
-                      title={isRevealed ? "Hide" : "Reveal"}
-                    >
-                      {isRevealed ? (
-                        <EyeOffIcon className="h-3.5 w-3.5" />
-                      ) : (
-                        <EyeIcon className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                          if (copied) {
+                            setCopiedId(`user-${item.id}`);
 
-                    <button
-                      onClick={async () => {
-                        const passwordToCopy =
-                          decryptedPassword || item.password;
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }
+                        }}
+                        className="rounded-md p-1 text-white/30 opacity-0 transition-all hover:bg-white/[0.06] hover:text-white/70 group-hover:opacity-100"
+                        title="Copy username"
+                      >
+                        {copiedId === `user-${item.id}` ? (
+                          <CheckIcon className="h-3.5 w-3.5 text-emerald-400" />
+                        ) : (
+                          <CopyIcon className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
 
-                        const copied = await copyToClipboard(passwordToCopy);
+                    <span className="text-white/15">•</span>
 
-                        if (copied) {
-                          setCopiedId(`pass-${item.id}`);
+                    {/* Password */}
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm tracking-wider text-white/60">
+                          {displayPassword}
+                        </span>
 
-                          setTimeout(() => setCopiedId(null), 2000);
-                        }
-                      }}
-                      className="rounded-md p-1 text-white/30 opacity-0 transition-all hover:bg-white/[0.06] hover:text-white/70 group-hover:opacity-100"
-                      title="Copy password"
-                    >
-                      {copiedId === `pass-${item.id}` ? (
-                        <CheckIcon className="h-3.5 w-3.5 text-emerald-400" />
-                      ) : (
-                        <CopyIcon className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                        {timeoutCountdown[item.id] !== undefined && (
+                          <span
+                            className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                              timeoutCountdown[item.id] <= 5
+                                ? "bg-red-500/20 text-red-300 animate-pulse"
+                                : "bg-amber-500/20 text-amber-300"
+                            }`}
+                          >
+                            {timeoutCountdown[item.id]}s
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => handleRevealPassword(item.id)}
+                        disabled={isDecrypting}
+                        className="rounded-md p-1 text-white/30 opacity-0 transition-all hover:bg-white/[0.06] hover:text-white/70 disabled:opacity-20 group-hover:opacity-100"
+                        title={isRevealed ? "Hide" : "Reveal"}
+                      >
+                        {isRevealed ? (
+                          <EyeOffIcon className="h-3.5 w-3.5" />
+                        ) : (
+                          <EyeIcon className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          const passwordToCopy =
+                            decryptedPassword || item.password;
+
+                          const copied = await copyToClipboard(passwordToCopy);
+
+                          if (copied) {
+                            setCopiedId(`pass-${item.id}`);
+
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }
+                        }}
+                        className="rounded-md p-1 text-white/30 opacity-0 transition-all hover:bg-white/[0.06] hover:text-white/70 group-hover:opacity-100"
+                        title="Copy password"
+                      >
+                        {copiedId === `pass-${item.id}` ? (
+                          <CheckIcon className="h-3.5 w-3.5 text-emerald-400" />
+                        ) : (
+                          <CopyIcon className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Actions */}
-              <div className="flex flex-shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                <button
-                  onClick={() => onEdit(item)}
-                  className="rounded-xl border border-white/[0.06] bg-white/[0.04] p-2.5 text-white/40 transition-all hover:border-white/[0.12] hover:bg-white/[0.08] hover:text-white/80"
-                  title="Edit"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
+                {/* Actions */}
+                <div className="flex flex-shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    onClick={() => onEdit(item)}
+                    className="rounded-xl border border-white/[0.06] bg-white/[0.04] p-2.5 text-white/40 transition-all hover:border-white/[0.12] hover:bg-white/[0.08] hover:text-white/80"
+                    title="Edit"
                   >
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
-                    <path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-                  </svg>
-                </button>
+                    <svg
+                      className="h-4 w-4"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25z" />
+                      <path d="M20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                    </svg>
+                  </button>
 
-                <button
-                  onClick={() => {
-                    if (
-                      confirm("Delete this credential? This cannot be undone.")
-                    ) {
-                      onDelete(item.id);
-                    }
-                  }}
-                  className="rounded-xl border border-red-400/10 bg-red-500/[0.04] p-2.5 text-white/40 transition-all hover:border-red-400/20 hover:bg-red-500/10 hover:text-red-300"
-                  title="Delete"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
+                  <button
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Delete this credential? This cannot be undone.",
+                        )
+                      ) {
+                        onDelete(item.id);
+                      }
+                    }}
+                    className="rounded-xl border border-red-400/10 bg-red-500/[0.04] p-2.5 text-white/40 transition-all hover:border-red-400/20 hover:bg-red-500/10 hover:text-red-300"
+                    title="Delete"
                   >
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z" />
-                  </svg>
-                </button>
+                    <svg
+                      className="h-4 w-4"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-9l-1 1H5v2h14V4z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
