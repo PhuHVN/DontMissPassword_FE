@@ -83,6 +83,14 @@ class ApiClient {
     return response.data.data;
   }
 
+  async registerByUsername(request: AccountRequest): Promise<AccountResponse> {
+    const response = await this.client.post<ApiResponse<AccountResponse>>(
+      "/auth/registerByUsername",
+      request
+    );
+    return response.data.data;
+  }
+
   async refreshToken(refreshToken: string): Promise<AuthResponse> {
     const response = await this.client.post<ApiResponse<AuthResponse>>(
       `/auth/refresh-token/${refreshToken}`

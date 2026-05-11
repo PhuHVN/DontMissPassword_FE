@@ -4,9 +4,9 @@
 
 // Account DTOs
 export interface AccountRequest {
-  email: string;
-  password: string;
-  fullName: string;
+  UsernameOrEmail: string;
+  Password: string;
+  FullName: string;
 }
 
 export interface AccountResponse {
@@ -20,8 +20,8 @@ export interface AccountResponse {
 
 // Auth DTOs
 export interface AuthRequest {
-  email: string;
-  password: string;
+  EmailOrUsername: string;
+  Password: string;
 }
 
 export interface AuthResponse {

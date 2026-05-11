@@ -7,10 +7,12 @@ interface LoginProps {
 
 export function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isRegister, setIsRegister] = useState(false);
+  const [registerByUsername, setRegisterByUsername] = useState(false);
   const [registerName, setRegisterName] = useState("");
   const [showOtpVerification, setShowOtpVerification] = useState(false);
   const [otpCode, setOtpCode] = useState("");
@@ -24,22 +26,76 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
     try {
       if (isRegister) {
-        // Register the user
-        await apiClient.register({
-          email,
-          password,
-          fullName: registerName,
-        });
+        // Validate register fields
+        if (!registerName.trim()) {
+          setError("Vui lòng nhập họ và tên.");
+          setLoading(false);
+          return;
+        }
 
-        // Store registered email and show OTP verification
-        setRegisteredEmail(email);
-        setShowOtpVerification(true);
-        setError("");
+        if (!password.trim()) {
+          setError("Vui lòng nhập mật khẩu.");
+          setLoading(false);
+          return;
+        }
+
+        // Register the user
+        if (registerByUsername) {
+          if (!username.trim()) {
+            setError("Vui lòng nhập username.");
+            setLoading(false);
+            return;
+          }
+
+          await apiClient.registerByUsername({
+            UsernameOrEmail: username,
+            Password: password,
+            FullName: registerName,
+          });
+
+          // Auto-login for username registration (no OTP required)
+          await apiClient.login({
+            EmailOrUsername: username,
+            Password: password,
+          });
+
+          onLoginSuccess();
+        } else {
+          if (!email.trim()) {
+            setError("Vui lòng nhập email.");
+            setLoading(false);
+            return;
+          }
+
+          await apiClient.register({
+            UsernameOrEmail: email,
+            Password: password,
+            FullName: registerName,
+          });
+
+          // Store registered email and show OTP verification for email registration
+          setRegisteredEmail(email);
+          setShowOtpVerification(true);
+          setError("");
+        }
       } else {
+        // Validate login fields
+        if (!email.trim()) {
+          setError("Vui lòng nhập email.");
+          setLoading(false);
+          return;
+        }
+
+        if (!password.trim()) {
+          setError("Vui lòng nhập mật khẩu.");
+          setLoading(false);
+          return;
+        }
+
         // Login
         await apiClient.login({
-          email,
-          password,
+          EmailOrUsername: email,
+          Password: password,
         });
 
         onLoginSuccess();
@@ -64,13 +120,15 @@ export function Login({ onLoginSuccess }: LoginProps) {
 
       // After successful OTP verification, automatically login
       await apiClient.login({
-        email: registeredEmail,
-        password: password,
+        EmailOrUsername: registeredEmail,
+        Password: password,
       });
 
       onLoginSuccess();
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Lỗi xác minh OTP.");
+      setError(
+        err.response?.data?.message || err.message || "Lỗi xác minh OTP.",
+      );
     } finally {
       setLoading(false);
     }
@@ -83,7 +141,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     try {
       await apiClient.resendOtp(registeredEmail);
       setResendCooldown(60);
-      
+
       // Countdown timer
       const interval = setInterval(() => {
         setResendCooldown((prev) => {
@@ -95,7 +153,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
         });
       }, 1000);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || "Lỗi gửi lại OTP.");
+      setError(
+        err.response?.data?.message || err.message || "Lỗi gửi lại OTP.",
+      );
     } finally {
       setLoading(false);
     }
@@ -260,17 +320,19 @@ export function Login({ onLoginSuccess }: LoginProps) {
             {/* Heading */}
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-white tracking-tight">
-                {showOtpVerification 
-                  ? "Xác minh email" 
-                  : (isRegister ? "Tạo tài khoản" : "Chào mừng trở lại")}
+                {showOtpVerification
+                  ? "Xác minh email"
+                  : isRegister
+                    ? "Tạo tài khoản"
+                    : "Chào mừng trở lại"}
               </h2>
 
               <p className="text-sm text-white/55 mt-2">
                 {showOtpVerification
                   ? `Nhập mã OTP được gửi đến ${registeredEmail}`
-                  : (isRegister
+                  : isRegister
                     ? "Điền thông tin để bắt đầu sử dụng"
-                    : "Đăng nhập để truy cập vault của bạn")}
+                    : "Đăng nhập để truy cập vault của bạn"}
               </p>
             </div>
 
@@ -295,7 +357,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
                     type="text"
                     required
                     value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
                     placeholder="000000"
                     maxLength={6}
                     className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10 text-center tracking-widest font-mono text-lg"
@@ -321,35 +385,121 @@ export function Login({ onLoginSuccess }: LoginProps) {
               /* Login/Register Form */
               <form onSubmit={handleLogin} className="space-y-5">
                 {isRegister && (
+                  <>
+                    {/* Registration Type Toggle */}
+                    <div className="flex gap-3 p-2 rounded-xl bg-white/[0.05] border border-white/[0.12]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegisterByUsername(false);
+                          setError("");
+                        }}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          !registerByUsername
+                            ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20"
+                            : "text-white/55 hover:text-white/70"
+                        }`}
+                      >
+                        Email Registration
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegisterByUsername(true);
+                          setError("");
+                        }}
+                        className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
+                          registerByUsername
+                            ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20"
+                            : "text-white/55 hover:text-white/70"
+                        }`}
+                      >
+                        Username Registration
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
+                        Họ và tên
+                      </label>
+
+                      <input
+                        type="text"
+                        value={registerName}
+                        onChange={(e) => setRegisterName(e.target.value)}
+                        placeholder="Nguyen Van A"
+                        className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {isRegister && !registerByUsername ? (
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
-                      Họ và tên
+                      Email
                     </label>
 
                     <input
                       type="text"
-                      value={registerName}
-                      onChange={(e) => setRegisterName(e.target.value)}
-                      placeholder="Nguyen Van A"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="email@example.com"
+                      className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
+                    />
+                  </div>
+                ) : isRegister && registerByUsername ? (
+                  <>
+                    <div>
+                      <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
+                        Username
+                      </label>
+
+                      <input
+                        type="text"
+                        required
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="your_username"
+                        className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
+                      />
+                    </div>
+
+                    <div className="flex items-start gap-3 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-400/20">
+                      <svg
+                        className="w-5 h-5 text-amber-300 flex-shrink-0 mt-0.5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <p className="text-xs text-amber-200 leading-relaxed">
+                        Lưu ý: Tài khoản đăng ký bằng username không yêu cầu xác
+                        minh email. Hãy đảm bảo tài khoản của bạn an toàn.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
+                      Email
+                    </label>
+
+                    <input
+                      type="text"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="email@example.com"
                       className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
                     />
                   </div>
                 )}
-
-                <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-widest text-white/55 mb-2">
-                    Email
-                  </label>
-
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="email@example.com"
-                    className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.07] backdrop-blur-md border border-white/[0.14] text-sm text-white placeholder-white/30 outline-none transition-all focus:border-violet-400/50 focus:ring-4 focus:ring-violet-500/10"
-                  />
-                </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -416,7 +566,9 @@ export function Login({ onLoginSuccess }: LoginProps) {
                   disabled={loading || resendCooldown > 0}
                   className="text-violet-300 hover:text-violet-200 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
-                  {resendCooldown > 0 ? `Gửi lại (${resendCooldown}s)` : "Gửi lại OTP"}
+                  {resendCooldown > 0
+                    ? `Gửi lại (${resendCooldown}s)`
+                    : "Gửi lại OTP"}
                 </button>
               </div>
             )}
@@ -429,6 +581,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
                   <button
                     onClick={() => {
                       setIsRegister(!isRegister);
+                      setRegisterByUsername(false);
                       setError("");
                     }}
                     className="text-violet-300 hover:text-violet-200 font-semibold transition-colors"
