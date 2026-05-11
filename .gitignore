@@ -18,7 +18,6 @@ node_modules/
 
 # Logs
 logs/
-logs
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -31,27 +30,17 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
-# Editor directories and files
-.vscode/*
+# IDE & Editor
+.vscode/
 !.vscode/extensions.json
 !.vscode/settings.json
-.idea
 .idea/
-.DS_Store
-Thumbs.db
+*.code-workspace
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?
-*.swp
-*.swo
-*~
 .vscode-test
-
-# IDE
-.vscode/
-*.code-workspace
 
 # OS
 .DS_Store
@@ -60,6 +49,13 @@ Thumbs.db
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+Thumbs.db
+
+# Swap files
+*.sw?
+*.swp
+*.swo
+*~
 
 # Yarn
 .yarn/cache/
